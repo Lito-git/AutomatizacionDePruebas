@@ -1,0 +1,46 @@
+# Pipeline CI del proyecto.
+# Se ejecuta en cada push a ramas de trabajo y en cada pull request hacia main.
+name: CI
+
+on:
+  push:
+    branches: [ main, 'feature/**', 'docs/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga el código del repositorio en el agente
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      # 2. Instala Java 21 (mismo JDK que el entorno local) y cachea ~/.m2
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # 3. Compila y ejecuta las pruebas. Si un test falla el pipeline falla
+      - name: Compilar y ejecutar pruebas
+        run: mvn -B clean test
+
+      # 4. Genera el reporte HTML aunque haya fallos (if: always)
+      - name: Generar reporte HTML de pruebas
+        if: always()
+        run: mvn -B surefire-report:report-only site -DgenerateReports=false
+
+      # 5. Publica el reporte como artefacto descargable para el equipo
+      - name: Publicar reporte de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-pruebas
+          path: |
+            target/site/
+            target/reports/
+            target/surefire-reports/
