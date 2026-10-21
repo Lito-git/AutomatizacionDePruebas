@@ -1,4 +1,4 @@
-# Pipeline CI del proyecto.
+# Pipeline de integración continua del proyecto.
 # Se ejecuta en cada push a ramas de trabajo y en cada pull request hacia main.
 name: CI
 
@@ -25,16 +25,20 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # 3. Compila y ejecuta las pruebas. Si un test falla el pipeline falla
-      - name: Compilar y ejecutar pruebas
-        run: mvn -B clean test
+      # 3. Compila y ejecuta solo las pruebas unitarias (feedback rápido)
+      - name: Pruebas unitarias
+        run: mvn -B clean test -Dtest='!RunCucumberTest'
 
-      # 4. Genera el reporte HTML aunque haya fallos (if: always)
+      # 4. Ejecuta los escenarios BDD mediante el runner de Cucumber
+      - name: Escenarios BDD
+        run: mvn -B test -Dtest=RunCucumberTest
+
+      # 5. Genera el reporte HTML de Surefire aunque haya fallos
       - name: Generar reporte HTML de pruebas
         if: always()
         run: mvn -B surefire-report:report-only site -DgenerateReports=false
 
-      # 5. Publica el reporte como artefacto descargable para el equipo
+      # 6. Publica el reporte de pruebas como artefacto descargable
       - name: Publicar reporte de pruebas
         if: always()
         uses: actions/upload-artifact@v4
@@ -44,3 +48,13 @@ jobs:
             target/site/
             target/reports/
             target/surefire-reports/
+
+      # 7. Publica el reporte navegable de Cucumber como artefacto descargable
+      - name: Publicar reporte BDD
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-bdd
+          path: |
+            target/cucumber-report.html
+            target/cucumber-report.json
