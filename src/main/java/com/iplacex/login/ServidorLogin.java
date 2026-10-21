@@ -35,13 +35,6 @@ public class ServidorLogin {
 
     /** Recibe las credenciales del formulario y responde con el código HTTP según el resultado. */
     private static void atenderLogin(HttpExchange exchange, ServicioAutenticacion servicio) throws IOException {
-        // SIMULACIÓN TEMPORAL: retardo artificial para provocar una degradación de rendimiento
-        try {
-            Thread.sleep(600);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
         if (!"POST".equals(exchange.getRequestMethod())) {
             responder(exchange, 405, "Método no permitido");
             return;
