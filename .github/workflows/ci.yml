@@ -58,3 +58,46 @@ jobs:
           path: |
             target/cucumber-report.html
             target/cucumber-report.json
+
+  # Job de performance: se ejecuta solo si el build y las pruebas funcionales pasan
+  performance:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      # 1. Descarga el código del repositorio en el agente
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      # 2. Instala Java 21 y cachea ~/.m2
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # 3. Compila y levanta el servidor de login en segundo plano, esperando a que responda
+      - name: Levantar servidor de login
+        run: |
+          mvn -B compile
+          nohup java -cp target/classes com.iplacex.login.ServidorLogin > servidor.log 2>&1 &
+          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:8080/login && break; sleep 1; done
+
+      # 4. Instala k6 en el agente
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      # 5. Ejecuta la prueba de carga; si se supera un umbral, el job falla
+      - name: Prueba de carga con k6
+        run: k6 run --out web-dashboard=export=target/reporte-performance.html --summary-export=target/k6-resumen.json performance/login-carga.js
+
+      # 6. Publica el reporte de performance aunque la prueba falle
+      - name: Publicar reporte de performance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-performance
+          path: |
+            target/reporte-performance.html
+            target/k6-resumen.json
