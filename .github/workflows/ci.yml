@@ -59,6 +59,11 @@ jobs:
             target/cucumber-report.html
             target/cucumber-report.json
 
+      # 8. Publica las métricas funcionales en el dashboard de la ejecución
+      - name: Dashboard de métricas funcionales
+        if: always()
+        run: python3 scripts/resumen_metricas.py
+
   # Job de performance: se ejecuta solo si el build y las pruebas funcionales pasan
   performance:
     runs-on: ubuntu-latest
@@ -92,7 +97,12 @@ jobs:
       - name: Prueba de carga con k6
         run: k6 run --out web-dashboard=export=target/reporte-performance.html --summary-export=target/k6-resumen.json performance/login-carga.js
 
-      # 6. Publica el reporte de performance aunque la prueba falle
+      # 6. Publica las métricas de performance en el dashboard aunque la prueba falle
+      - name: Dashboard de métricas de performance
+        if: always()
+        run: python3 scripts/resumen_metricas.py
+
+      # 7. Publica el reporte de performance aunque la prueba falle
       - name: Publicar reporte de performance
         if: always()
         uses: actions/upload-artifact@v4
@@ -101,3 +111,31 @@ jobs:
           path: |
             target/reporte-performance.html
             target/k6-resumen.json
+
+  # Job de alerta: se ejecuta solo si algún job anterior falla
+  alerta:
+    runs-on: ubuntu-latest
+    needs: [ build-and-test, performance ]
+    if: failure()
+    permissions:
+      issues: write
+
+    steps:
+      # Crea un issue con el detalle del fallo para notificar al equipo
+      - name: Crear issue de alerta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh issue create \
+            --title "Alerta CI: pipeline fallido en ${{ github.ref_name }}" \
+            --body "El pipeline de CI detectó un fallo o una degradación.
+
+          - **Rama:** ${{ github.ref_name }}
+          - **Commit:** ${{ github.sha }}
+          - **Autor del cambio:** ${{ github.actor }}
+          - **Pruebas funcionales (build-and-test):** ${{ needs.build-and-test.result }}
+          - **Prueba de carga (performance):** ${{ needs.performance.result }}
+          - **Ejecución:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Revisar el dashboard y los reportes de la ejecución para identificar la causa."
